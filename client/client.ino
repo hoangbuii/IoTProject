@@ -1,24 +1,24 @@
-
+//Include Library
 #include <DHT.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "nha";
-const char* password = "12345678";
-const char* mqtt_server = "test.mosquitto.org";
+// WIFI and MQTT Broker information
+const char* ssid = "POCO X4 GT";
+const char* password = "thuongcute";
+const char* mqtt_server = "13.231.154.153";
 
+// PIN connection
 #define DHTTYPE DHT11
-
 #define DHT_PIN D2
 #define SOIL_MOISTURE_PIN A0
-#define LUX_PIN D1
-#define AIR_PIN D0
 #define LIGHT1_PIN D3
 #define LIGHT2_PIN D4
 #define PUMP_PIN D5
+#define AIR_PIN D6
 
+// Necessary Variable
 DHT dht(DHT_PIN, DHTTYPE);
-
 WiFiClient espClient;
 PubSubClient client(espClient);
 unsigned long lastMsg = 0;
@@ -26,16 +26,16 @@ unsigned long lastMsg = 0;
 char msg[MSG_BUFFER_SIZE];
 float temp = 0;
 float humid = 0;
-int lux = 0;
 int soil = 0;
 int light1_st = 0;
 int light2_st = 0;
 int air_st = 0;
 int pump_st = 0;
+char tmp[10];
 
+// Setup WIFI connection
 void setup_wifi() {
-  
-    delay(10);
+  delay(10);
   // We start by connecting to a WiFi network
   Serial.println();
   Serial.print("Connecting to ");
@@ -55,6 +55,8 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
+// Process when received control data
+// Check topic and control actors
 void processData(char* topic, byte* payload) {
   if (strcmp(topic, "light1") == 0) {
     if((char)payload[0] == '1') {
@@ -64,7 +66,9 @@ void processData(char* topic, byte* payload) {
       digitalWrite(LIGHT1_PIN, LOW);
       light1_st = 0;
     }
-    
+    dtostrf(light1_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("light1-st", msg);
   } else if (strcmp(topic, "light2") == 0) {
     if((char)payload[0] == '1') {
       digitalWrite(LIGHT2_PIN, HIGH);
@@ -73,6 +77,9 @@ void processData(char* topic, byte* payload) {
       digitalWrite(LIGHT2_PIN, LOW);
       light2_st = 0;
     }
+    dtostrf(light2_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("light2-st", msg);
   } else if (strcmp(topic, "air") == 0) {
     if((char)payload[0] == '1') {
       digitalWrite(AIR_PIN, HIGH);
@@ -81,6 +88,9 @@ void processData(char* topic, byte* payload) {
       digitalWrite(AIR_PIN, LOW);
       air_st = 0;
     }
+    dtostrf(air_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("air-st", msg);
   } else if (strcmp(topic, "pump") == 0) {
     if((char)payload[0] == '1') {
       digitalWrite(PUMP_PIN, HIGH);
@@ -89,9 +99,13 @@ void processData(char* topic, byte* payload) {
       digitalWrite(PUMP_PIN, LOW);
       pump_st = 0;
     }
+    dtostrf(pump_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("pump-st", msg);
   }
 }
 
+//Get data from MQTT broker
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -100,14 +114,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print((char)payload[i]);
   }
   processData(topic, payload);
-  // if((char)payload[0] == '1') {
-  //   digitalWrite(LED, HIGH);
-  // } else {
-  //   digitalWrite(LED, LOW); 
-  // }
   Serial.println();
 }
 
+// Connect and reconnect to WIFI and MQTT broker
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
@@ -119,14 +129,6 @@ void reconnect() {
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("temp", "hello IoT Gateway...");
-      client.publish("hum", "hello IoT Gateway...");
-      client.publish("lux", "hello IoT Gateway...");
-      client.publish("soilMoisture", "hello IoT Gateway...");
-      client.publish("light1-st", "hello IoT Gateway...");
-      client.publish("light2-st", "hello IoT Gateway...");
-      client.publish("air-st", "hello IoT Gateway...");
-      client.publish("pump-st", "hello IoT Gateway...");
       // ... and resubscribe
       client.subscribe("light1");
       client.subscribe("light2");
@@ -142,13 +144,13 @@ void reconnect() {
   }
 }
 
-void sendData() {
+// Read sensordata from Sensor and publish it to MQTT broker
+void publishSensorData() {
   temp = dht.readTemperature();
   humid = dht.readHumidity();
-  lux = digitalRead(LUX_PIN);
   int soilMoistureValue = analogRead(SOIL_MOISTURE_PIN);
   soil = map(soilMoistureValue, 1023, 0, 0, 100);
-  char tmp[10];
+
 
   dtostrf(temp, 4, 3, tmp);
   snprintf (msg, MSG_BUFFER_SIZE, tmp);
@@ -156,29 +158,11 @@ void sendData() {
   dtostrf(humid, 4, 1, tmp);
   snprintf (msg, MSG_BUFFER_SIZE, tmp);
   client.publish("hum", msg);
-  dtostrf(lux, 1, 0, tmp);
-  snprintf (msg, MSG_BUFFER_SIZE, tmp);
-  client.publish("lux", msg);
   dtostrf(soil, 4, 0, tmp);
   snprintf (msg, MSG_BUFFER_SIZE, tmp);
   client.publish("soilMoisture", msg);
   
-  dtostrf(light1_st, 1, 0, tmp);
-  snprintf (msg, MSG_BUFFER_SIZE, tmp);
-  client.publish("light1-st", msg);
-  dtostrf(light2_st, 1, 0, tmp);
-  snprintf (msg, MSG_BUFFER_SIZE, tmp);
-  client.publish("light2-st", msg);
-  dtostrf(air_st, 1, 0, tmp);
-  snprintf (msg, MSG_BUFFER_SIZE, tmp);
-  client.publish("air-st", msg);
-  dtostrf(pump_st, 1, 0, tmp);
-  snprintf (msg, MSG_BUFFER_SIZE, tmp);
-  client.publish("pump-st", msg);
-
-
-
-
+ client.publish("sql1", msg);
 }
 
 
@@ -187,7 +171,6 @@ void setup() {
   setup_wifi();
   Serial.begin(9600);
   dht.begin();
-  pinMode(LUX_PIN, INPUT);
   pinMode(AIR_PIN, OUTPUT);
   pinMode(LIGHT1_PIN, OUTPUT);
   pinMode(LIGHT2_PIN, OUTPUT);
@@ -204,18 +187,38 @@ void loop() {
   client.loop();
 
   unsigned long now = millis();
-  if (now - lastMsg > 2000) {
+  if (now - lastMsg > 30000) {
     lastMsg = now;
-    sendData();
-    // float temperature = dht.readTemperature();
-    // char tmp[10]; 
-    // dtostrf(temperature, 4, 3, tmp);
-    // snprintf (msg, MSG_BUFFER_SIZE, tmp);
-    // Serial.print("Publish message temperature: ");
-    // Serial.println(msg);
-    // client.publish("sensingData4", msg);
-
+    publishSensorData();
   }
 
+  if (temp > 30 && air_st == 0) {
+    digitalWrite(AIR_PIN, HIGH);
+    air_st = 1;
+    dtostrf(air_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("air-st", msg);
+  }
+  if (temp < 25 && air_st == 1) {
+    digitalWrite(AIR_PIN, LOW);
+    air_st = 0;
+    dtostrf(air_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("air-st", msg);
+  }
 
+  if (soil < 10 && pump_st == 0) {
+    digitalWrite(PUMP_PIN, HIGH);
+    pump_st = 1;
+    dtostrf(pump_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("pump-st", msg);
+  }
+  if (soil > 50 && pump_st == 1) {
+    digitalWrite(PUMP_PIN, LOW);
+    pump_st = 0;
+    dtostrf(pump_st, 1, 0, tmp);
+    snprintf (msg, MSG_BUFFER_SIZE, tmp);
+    client.publish("pump-st", msg);
+  }
 }
